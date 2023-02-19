@@ -1,54 +1,34 @@
 pipeline {
-    agent any
     
-    tools {
-        maven 'M2_HOME'
-        terraform 'Terraform-1.3.7'
+    agent {
+        label 'Slave1'
     }
-    environment {
-        AWS_ACCESS_KEY_ID = '${Access_Key}'
-        AWS_SECRET_KEY = '${Secret_Key}'
-        }
 
+    tools 
+    {
+        maven 'maven-3.8.7'
+    }
+    
     stages {
-        stage('Checkout') {
+        stage('SCM-Checkout') {
             steps {
-            checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/devopscbabu/DevOpsAddressBook.git']]])
+                // Get some code from a GitHub repository
+                git 'https://github.com/manju65char/springboot_application_project.git'
+
+            }
+              post {
+                failure {
+                  sh "echo 'Send mail on failure'"
+                  mail to:"dummyid@gmail.com", from: 'dummyid@gmail.com', subject:"FAILURE: ${currentBuild.fullDisplayName}", body: "we failed."
+                }
+              }
+			}
+        stage('Build with Maven') {
+            steps {
+                sh 'mvn compile'
+                sh 'mvn test'
+                sh 'mvn package'
             }
         }
-        stage('Compile') {
-            steps {
-            sh 'mvn clean package'
-            }
-        }  
-        stage('Docker Build') {
-            steps {
-                sh 'docker build -t cbabu85/devopsaddressbook .'
-            }
-        }
-        stage('Docker Push') {
-            steps { 
-                withCredentials([string(credentialsId: 'docker-hub', variable: 'dockerHubPwd')]) {
-                sh 'docker login -u cbabu85 -p ${dockerHubPwd}'
-                  }
-                sh 'docker push cbabu85/devopsaddressbook'
-                  }                                     
-             }
-         stage('Terraform init') {
-             steps {
-                 sh 'terraform init'
-             }
-         }
-         stage('Terraform Apply') {
-             steps {
-                 sh 'terraform apply --auto-approve'
-                 sleep 20
-             }
-         }
-        stage('Docker Deploy using Ansible') {
-             steps {
-                 ansiblePlaybook credentialsId: 'terraform-docker', disableHostKeyChecking: true, installation: 'ansible', inventory: 'dev.inv', playbook: 'deploy-docker.yml'
-             }
-        }
-     }
+    }
 }
